@@ -130,61 +130,6 @@ fi
 }
 
 
-createNsOgSubs () {
-
-resourceExist default namespace ${NS_CS}
-if [ $? -eq 0 ]; then
-
-cat <<EOF | oc apply -f -
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: ${NS_CS}
-EOF
-
-fi
-
-resourceExist ${NS_CS} operatorgroup operatorgroup
-if [ $? -eq 0 ]; then
-
-cat <<EOF | oc apply -f -
-apiVersion: operators.coreos.com/v1alpha2
-kind: OperatorGroup
-metadata:
-  name: operatorgroup
-  namespace: ${NS_CS}
-spec:
-  targetNamespaces:
-  - ${NS_CS}
-EOF
-
-fi
-
-resourceExist ${NS_CS} Subscription ibm-common-service-operator
-if [ $? -eq 0 ]; then
-
-cat <<EOF | oc apply -f -
-apiVersion: operators.coreos.com/v1alpha1
-kind: Subscription
-metadata:
-  name: ibm-common-service-operator
-  namespace: ${NS_CS}
-spec:
-  channel: v3.22
-  installPlanApproval: Automatic
-  name: ibm-common-service-operator
-  source: ibm-operator-catalog
-  sourceNamespace: openshift-marketplace
-EOF
-
-echo "Wait ibm-common-service-operator setup in namespace '${NS_CS}' ..."
-sleep 30
-oc -n ${NS_CS} get csv
-oc get crd | grep operandrequest
-
-fi
-
-}
 
 patchLicense() {
 oc patch -n ${NS_CS} commonservice/common-service --type=merge -p '{"spec": {"license": {"accept": true } } }'
@@ -492,6 +437,74 @@ spec:
     install: false
 EOF
 }
+
+createSubscription () {
+
+resourceExist ${NS_CS} Subscription ibm-common-service-operator
+if [ $? -eq 0 ]; then
+
+cat <<EOF | oc apply -f -
+apiVersion: operators.coreos.com/v1alpha1
+kind: Subscription
+metadata:
+  name: ibm-common-service-operator
+  namespace: ${NS_CS}
+spec:
+  channel: v3.22
+  installPlanApproval: Automatic
+  name: ibm-common-service-operator
+  source: ibm-operator-catalog
+  sourceNamespace: openshift-marketplace
+EOF
+
+echo "Wait ibm-common-service-operator setup in namespace '${NS_CS}' ..."
+sleep 30
+oc -n ${NS_CS} get csv
+oc get crd | grep operandrequest
+
+fi
+
+}
+
+#-------------------------------
+resourceCount () {
+  return $(oc get $2 -n $1 | grep -v NAME | wc -l)
+}
+
+#-------------------------------
+createNamespaceIfNotExist() {
+
+  namespaceExist $1
+  _ns=$?
+  if [[ $_ns -eq 0 ]]; then
+    oc new-project $1 > /dev/null 2>&1 
+  fi
+
+}
+
+#-------------------------------
+createOperatorGroupIfNotExist() {
+
+  resourceCount $1 operatorgroups
+  _og=$?
+  if [[ $_og -eq 0 ]]; then
+
+cat <<EOF | oc create -f - 
+apiVersion: operators.coreos.com/v1alpha2 
+kind: OperatorGroup 
+metadata: 
+  name: $2
+  namespace: $1
+spec: 
+  targetNamespaces: 
+  - $1
+EOF
+
+  fi
+
+}
+
+
 #------------------------------------------------
 
 
@@ -509,7 +522,12 @@ createCatalogSource_ibm_operator_catalog
 waitForResourceCreated ${_NS} ${_RES_TYPE} ${_RES_NAME} ${_WAIT_SECS}
 waitForResourceReady ${_NS} ${_RES_TYPE} ${_RES_NAME} ${_WAIT_SECS}
 
-createNsOgSubs
+createNamespaceIfNotExist ${NS_CS}
+
+createOperatorGroupIfNotExist ${NS_CS} operatorgroup
+
+createSubscription
+
 waitForResourceCreated ${NS_CS} commonservice common-service ${_WAIT_SECS}
 
 patchLicense
