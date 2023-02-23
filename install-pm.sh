@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # export NS_CS=ibm-common-services
-# export PM_NAMESPACE=pm1
+# export PM_NAMESPACE=pm
 # export SC_NAME=managed-nfs-storage
 # ./install-pm.sh ${NS_CS} ${PM_NAMESPACE} ${SC_NAME}
 
